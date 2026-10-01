@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# The Great Marble Race
 
-## Getting Started
+A live marble-racing betting game for team video calls. The host screen-shares a 3D physics race; everyone else bets Marble Bucks from their phone. The lowest finishers are knocked out each race until one marble is crowned champion.
 
-First, run the development server:
+## How a game works
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. **Host** opens the site, picks a length (Quick 4 races · Standard 6 · Marathon 8) and clicks **Create game**, then shares that browser window on Zoom.
+2. **Players** scan the QR code or go to the site and enter the 4-letter code. Everyone starts with 1,000 Marble Bucks.
+3. **Before each race**, players bet on:
+   - **Race winner**
+   - **Elimination** (pick a marble that gets knocked out)
+   - **Champion**: opens in the lobby; "late money" reopens between races at shorter odds.
+4. **During the race**, live props pop up on phones for a few seconds each:
+   - "Who leads at Checkpoint 2?"
+   - "Will {leader} win this race?"
+   - "Will {marble on the bubble} escape elimination?"
+5. **After each race**, bets settle automatically, eliminations are revealed, and the host clicks to open the next race. Anyone who's gone broke is topped back up to 100.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Odds are **pari-mutuel**: each market is one pot, and everyone who bet on a winning option splits it in proportion to their stake, so odds move as money comes in. A small virtual seed on every option keeps early odds sane.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Create a free project at [supabase.com](https://supabase.com/dashboard).
+2. **Authentication → Sign In / Providers → Allow anonymous sign-ins**: turn it on.
+3. Copy `.env.local.example` to `.env.local` (or `.env`) and fill in the Project URL and **publishable** key.
+4. Apply the schema: run `supabase/migrations/*_init.sql` in the dashboard SQL Editor, or `supabase link --project-ref <ref> && supabase db push`.
+5. `npm install && npm run dev`, then open http://localhost:3000.
 
-## Learn More
+Tip for testing alone: each `*.localhost` subdomain gets its own anonymous player, e.g. host on `localhost:3000` and players on `p1.localhost:3000`, `p2.localhost:3000`.
 
-To learn more about Next.js, take a look at the following resources:
+## Deploy
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Push to GitHub and import it into [Vercel](https://vercel.com/new), adding the two `NEXT_PUBLIC_SUPABASE_*` env vars. The QR code uses whatever URL the host screen is served from.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Code map
 
-## Deploy on Vercel
+| Path | What |
+| --- | --- |
+| `lib/race/track.ts` | Seeded procedural track: banked S-bends, helixes, spinners, pegs, boost pads |
+| `lib/race/engine.ts` | Rapier physics race: progress, standings, checkpoint/lead/finish events. Deterministic per seed |
+| `lib/race/renderer.ts`, `runner.ts` | three.js view, camera director, slow-mo, animation loop |
+| `lib/game/director.ts` | Host-side race control: locks betting, opens/settles live props, eliminates, advances rounds |
+| `lib/game/odds.ts` | Pari-mutuel odds (mirrors `private.settle_market` in SQL) |
+| `supabase/migrations/` | Schema, RLS and RPCs. Clients only read tables; all writes go through host/player-checked functions |
+| `components/host/HostGame.tsx` | The screen-shared host view |
+| `components/play/PlayGame.tsx` | The phone view |
+| `/sandbox` | Race-only page for tuning tracks and cameras without a backend |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`npm test` runs the odds and race-engine tests (headless physics).
