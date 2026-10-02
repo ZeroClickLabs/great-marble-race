@@ -57,7 +57,7 @@ export class RaceRenderer {
     this.host = host;
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = theme.exposure;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -243,7 +243,8 @@ export class RaceRenderer {
     this.lights.sun.shadow.mapSize.set(q.shadowMapSize, q.shadowMapSize);
     this.lights.sun.shadow.map?.dispose();
     this.lights.sun.shadow.map = null;
-    this.renderer.shadowMap.type = this.qualityLevel === 0 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    // Softer shadow edges at the top level (PCFSoftShadowMap is gone in this three.js version).
+    this.lights.sun.shadow.radius = this.qualityLevel === 0 ? 3 : 1;
     this.post.enabled = q.bloom;
     this.resize();
   }

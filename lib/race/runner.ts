@@ -11,6 +11,8 @@ export interface RaceSnapshot {
   progress: Record<number, number>;
   finished: number[];
   slowMo: boolean;
+  /** Average speed (m/s) of the leading marbles still racing — drives the rolling sound. */
+  pace: number;
 }
 
 export interface RunnerOptions {
@@ -76,6 +78,11 @@ export class RaceRunner {
     const { gateS, finishS } = race.track;
     const progress: Record<number, number> = {};
     for (const r of race.racers) progress[r.slot] = Math.max(0, Math.min(1, (r.progress - gateS) / (finishS - gateS)));
+    const pack = race.standings
+      .map((slot) => race.racer(slot)!)
+      .filter((r) => !r.finished)
+      .slice(0, 6);
+    const pace = race.phase === "running" && pack.length ? pack.reduce((s, r) => s + r.speed, 0) / pack.length : 0;
     return {
       phase: race.phase,
       time: race.time,
@@ -83,6 +90,7 @@ export class RaceRunner {
       progress,
       finished: [...race.finishOrder],
       slowMo: this.rate < 1,
+      pace,
     };
   }
 
