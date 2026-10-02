@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import { useRef, useState } from "react";
 import { Standings } from "@/components/race/Standings";
+import { SoundControl } from "@/components/SoundControl";
+import { playRaceEvent, raceIntensity, updateRaceAmbience, useRaceAudio } from "@/lib/audio/useRaceAudio";
 import type { RaceStageHandle } from "@/components/race/RaceStage";
 import type { RaceEvent } from "@/lib/race/engine";
 import { marbleBySlot } from "@/lib/race/marbles";
@@ -32,6 +34,7 @@ export default function Sandbox() {
   const [snap, setSnap] = useState<RaceSnapshot | null>(null);
   const [log, setLog] = useState<string[]>([]);
   const stage = useRef<RaceStageHandle>(null);
+  const audio = useRaceAudio(theme, raceIntensity(snap?.phase === "running", snap, false));
 
   return (
     <div className="relative h-dvh w-full">
@@ -41,13 +44,25 @@ export default function Sandbox() {
         theme={theme}
         entrants={ENTRANTS}
         eliminate={4}
-        onTick={setSnap}
-        onEvent={(e) => e.type !== "boost" && setLog((l) => [describe(e), ...l].slice(0, 12))}
+        onTick={(s) => {
+          setSnap(s);
+          updateRaceAmbience(audio.engine, s);
+        }}
+        onEvent={(e) => {
+          playRaceEvent(audio.engine, e, 4);
+          if (e.type !== "boost") setLog((l) => [describe(e), ...l].slice(0, 12));
+        }}
       />
       <div className="absolute left-4 top-4">{snap && <Standings snap={snap} eliminate={4} />}</div>
       <div className="absolute right-4 top-4 flex w-72 flex-col gap-2 rounded-lg bg-ink/80 p-3 text-sm">
         <div className="flex gap-2">
-          <button className="rounded bg-lime px-3 py-1 font-bold text-ink" onClick={() => stage.current?.start()}>
+          <button
+            className="rounded bg-lime px-3 py-1 font-bold text-ink"
+            onClick={() => {
+              audio.engine?.go();
+              stage.current?.start();
+            }}
+          >
             Start
           </button>
           <button
@@ -77,6 +92,13 @@ export default function Sandbox() {
             </button>
           ))}
         </div>
+        <SoundControl
+          unlocked={audio.unlocked}
+          muted={audio.prefs.muted}
+          volume={audio.prefs.volume}
+          onMuted={audio.setMuted}
+          onVolume={audio.setVolume}
+        />
         <div className="tabular">t = {snap?.time.toFixed(1)}s {snap?.slowMo && "· SLOW-MO"}</div>
         <ul className="text-muted">
           {log.map((l, i) => (

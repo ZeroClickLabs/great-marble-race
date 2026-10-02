@@ -18,6 +18,10 @@ A live marble-racing betting game for team video calls. The host screen-shares a
 
 Odds are **pari-mutuel**: each market is one pot, and everyone who bet on a winning option splits it in proportion to their stake, so odds move as money comes in. A small virtual seed on every option keeps early odds sane.
 
+## Sound
+
+Music and sound effects play on the **host's** machine only — when sharing on Zoom, tick **Share sound**. Each theme has its own generated soundtrack (calm while betting, full band while racing, a lead line near the finish), plus countdown beeps, crowd cheers, boost whooshes, a rolling rumble that follows the marbles' speed, and fanfares. Mute/volume is in the host's top bar. To use your own music, see [`public/music/README.md`](public/music/README.md).
+
 ## Setup
 
 1. Create a free project at [supabase.com](https://supabase.com/dashboard).

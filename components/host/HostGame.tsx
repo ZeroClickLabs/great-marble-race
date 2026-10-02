@@ -9,6 +9,8 @@ import { MarbleChip, MarbleDot } from "@/components/MarbleChip";
 import { isBettable, secondsLeft } from "@/components/play/MarketCard";
 import type { RaceStageHandle } from "@/components/race/RaceStage";
 import { Standings } from "@/components/race/Standings";
+import { SoundControl } from "@/components/SoundControl";
+import { playRaceEvent, raceIntensity, updateRaceAmbience, useRaceAudio } from "@/lib/audio/useRaceAudio";
 import { fetchForms } from "@/lib/game/api";
 import { advanceRound, eliminationsFor, RaceDirector } from "@/lib/game/director";
 import { formatMultiplier, multiplier, poolsFor } from "@/lib/game/odds";
@@ -68,6 +70,21 @@ export default function HostGame({ code }: { code: string }) {
     [g.marbles, round],
   );
   const entrants = useMemo(() => (forms ? field.map((slot) => ({ slot, form: forms[slot] ?? 0 })) : []), [field, forms]);
+  const finalRace = field.length - elim === 1;
+
+  // Music follows the race's theme: calm while betting, full band while racing, finale near the line.
+  const audio = useRaceAudio(
+    game ? themeForRound(game.id, round).key : null,
+    game?.status === "racing" ? raceIntensity(true, snap, finalRace) : game?.status === "finished" ? 1 : 0,
+  );
+  const sfx = audio.engine;
+  const championPlayed = useRef(false);
+  useEffect(() => {
+    if (game?.status === "finished" && !championPlayed.current) {
+      championPlayed.current = true;
+      sfx?.champion();
+    }
+  }, [game?.status, sfx]);
 
   const say = useCallback(
     (text: string, tone?: RaceCaption["tone"]) => {
@@ -83,9 +100,12 @@ export default function HostGame({ code }: { code: string }) {
     for (const m of g.markets) {
       if (m.kind !== "prop" || m.status !== "open" || announcedProps.current.has(m.id)) continue;
       announcedProps.current.add(m.id);
-      if (raceLive.current) say(`LIVE PROP: ${m.question} Bet now!`, "prop");
+      if (raceLive.current) {
+        say(`LIVE PROP: ${m.question} Bet now!`, "prop");
+        sfx?.propOpened();
+      }
     }
-  }, [g.markets, say]);
+  }, [g.markets, say, sfx]);
 
   const onError = useCallback((e: unknown) => setError(errorMessage(e)), []);
 
@@ -102,17 +122,21 @@ export default function HostGame({ code }: { code: string }) {
     setBusy(false);
     for (const n of [3, 2, 1]) {
       setCountdown(n);
+      sfx?.countdownBeep();
       await new Promise((r) => setTimeout(r, 1000));
     }
     setCountdown(0);
+    sfx?.go();
     raceLive.current = true;
     stage.current?.start();
     setTimeout(() => setCountdown(null), 900);
-  }, [game, busy, round, field, onError]);
+  }, [game, busy, round, field, onError, sfx]);
 
   const onEvent = useCallback(
     (e: RaceEvent) => {
       director.current?.handle(e);
+      // The final's loser isn't "knocked out" — the champion fanfare covers that moment.
+      playRaceEvent(sfx, e, finalRace ? 0 : elim);
       switch (e.type) {
         case "start":
           say("And they're off!");
@@ -142,13 +166,14 @@ export default function HostGame({ code }: { code: string }) {
           break;
       }
     },
-    [say, field.length, elim, round],
+    [say, field.length, elim, round, sfx, finalRace],
   );
 
   const onTick = useCallback(
     (s: RaceSnapshot) => {
       snapRef.current = s;
       setSnap(s);
+      updateRaceAmbience(sfx, s);
       if (s.phase !== "running") return;
       if (s.time > 3) director.current?.openOpeningProp(s.standings);
       // Commentary when the elimination line changes hands.
@@ -166,7 +191,7 @@ export default function HostGame({ code }: { code: string }) {
         broadcast.tick({ round, time: s.time, standings: s.standings, finished: s.finished, progress: s.progress, eliminate: elim });
       }
     },
-    [broadcast, elim, game, round, say],
+    [broadcast, elim, game, round, say, sfx],
   );
 
   if (g.phase === "loading") return <Center>Loading…</Center>;
@@ -201,7 +226,21 @@ export default function HostGame({ code }: { code: string }) {
         />
       )}
 
-      <TopBar game={game} code={code} snap={snap} live={game.status === "racing"} />
+      <TopBar
+        game={game}
+        code={code}
+        snap={snap}
+        live={game.status === "racing"}
+        sound={
+          <SoundControl
+            unlocked={audio.unlocked}
+            muted={audio.prefs.muted}
+            volume={audio.prefs.volume}
+            onMuted={audio.setMuted}
+            onVolume={audio.setVolume}
+          />
+        }
+      />
 
       {pre && (
         <PreRace
@@ -312,10 +351,22 @@ function Center({ children }: { children: React.ReactNode }) {
   return <div className="flex h-dvh flex-col items-center justify-center gap-3 text-muted">{children}</div>;
 }
 
-function TopBar({ game, code, snap, live }: { game: Game; code: string; snap: RaceSnapshot | null; live: boolean }) {
+function TopBar({
+  game,
+  code,
+  snap,
+  live,
+  sound,
+}: {
+  game: Game;
+  code: string;
+  snap: RaceSnapshot | null;
+  live: boolean;
+  sound: React.ReactNode;
+}) {
   const total = game.config.eliminations.length;
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-4">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between p-4">
       <div className="font-display flex items-center gap-3 rounded-xl bg-ink/85 px-4 py-2 text-2xl font-bold uppercase">
         <span className="text-lime">Great Marble Race</span>
         <span className="text-muted">·</span>
@@ -334,11 +385,14 @@ function TopBar({ game, code, snap, live }: { game: Game; code: string; snap: Ra
           </>
         )}
       </div>
-      {game.status !== "lobby" && (
-        <div className="font-display rounded-xl bg-ink/85 px-4 py-2 text-xl font-bold uppercase">
-          Join: <span className="text-lime tracking-widest">{code}</span>
-        </div>
-      )}
+      <div className="flex items-start gap-2">
+        {sound}
+        {game.status !== "lobby" && (
+          <div className="font-display rounded-xl bg-ink/85 px-4 py-2 text-xl font-bold uppercase">
+            Join: <span className="text-lime tracking-widest">{code}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -439,7 +493,9 @@ function PreRace({
         >
           {canStart ? "Start race ▶" : "Loading track…"}
         </button>
-        <p className="-mt-2 text-center text-xs text-muted">Betting locks when the race starts.</p>
+        <p className="-mt-2 text-center text-xs text-muted">
+          Betting locks when the race starts. On Zoom, tick <b className="text-text">Share sound</b> when sharing so everyone hears the race.
+        </p>
       </div>
     </>
   );
