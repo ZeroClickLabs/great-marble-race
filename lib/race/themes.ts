@@ -2,10 +2,10 @@
  * Visual themes, one per race. Pure data (no three.js) so phones can show the theme name too.
  */
 
-export type FloorStyle = "wood" | "neon" | "candy" | "ice" | "basalt";
-export type GroundStyle = "grass" | "grid" | "frosting" | "snow" | "ash";
-export type SceneryStyle = "trees" | "city" | "lollipops" | "pines" | "volcanic";
-export type ParticleStyle = "pollen" | "none" | "sprinkles" | "snow" | "embers";
+export type FloorStyle = "wood" | "neon" | "candy" | "ice" | "basalt" | "coterie";
+export type GroundStyle = "grass" | "grid" | "frosting" | "snow" | "ash" | "studio";
+export type SceneryStyle = "trees" | "city" | "lollipops" | "pines" | "volcanic" | "coterie";
+export type ParticleStyle = "pollen" | "none" | "sprinkles" | "snow" | "embers" | "bubbles";
 
 export interface Theme {
   key: string;
@@ -35,11 +35,18 @@ export interface Theme {
   gates: { checkpoint: string; finish: string; start: string; glow: string };
   obstacles: { spinner: string; peg: string; boost: string };
   ground: { style: GroundStyle; base: string; alt: string };
-  mountains: { near: string; far: string; snowcap?: string };
+  /** hidden: no horizon mountains — an endless studio backdrop instead. */
+  mountains: { near: string; far: string; snowcap?: string; hidden?: boolean };
   scenery: { style: SceneryStyle; colors: string[]; trunk: string; density: number };
   particles: { style: ParticleStyle; color: string };
   crowd: string[];
   flags: string[];
+  /** Custom gate signs (defaults: START / CHECKPOINT n / FINISH, bold white-or-dark lettering). */
+  signs?: { start?: string; finish?: string; checkpoint?: string; ink?: string; font?: "brand" };
+  /** Photo billboards placed around the course (paths under /public). */
+  billboards?: { src: string; aspect: number }[];
+  /** Reserved for the grand final instead of joining the normal rotation. */
+  finale?: boolean;
 }
 
 export const THEMES: readonly Theme[] = [
@@ -180,7 +187,45 @@ export const THEMES: readonly Theme[] = [
     crowd: ["#ffd21f", "#ff6a1f", "#e23b3b", "#ffffff"],
     flags: ["#ff6a1f", "#ffd21f", "#1c1714"],
   },
+  {
+    // Grand-final brand theme. Colours sampled from Coterie product photography.
+    key: "coterie",
+    name: "Coterie Diapering Land",
+    tagline: "The softest, driest grand final ever",
+    accent: "#8fb0f0",
+    finale: true,
+    signs: { start: "Welcome to Diapering Land", finish: "Coterie", checkpoint: "Checkpoint", ink: "#22299b", font: "brand" },
+    billboards: [
+      { src: "/coterie/diaper.jpg", aspect: 1 },
+      { src: "/coterie/wipes.jpg", aspect: 16 / 9 },
+      { src: "/coterie/balm.jpg", aspect: 16 / 9 },
+    ],
+    sky: { top: "#a9bfdc", horizon: "#e4eefc", bottom: "#d1e3fb", stars: false },
+    fog: { color: "#dbe8fb", near: 70, far: 260 },
+    sun: { color: "#ffffff", intensity: 1.7, elevation: 55, azimuth: 25 },
+    hemi: { sky: "#eef3ff", ground: "#9fb3d0", intensity: 0.65 },
+    envIntensity: 0.55,
+    exposure: 0.78,
+    bloom: { strength: 0.25, radius: 0.4, threshold: 3.2 },
+    floor: { style: "coterie", base: "#9db4dc", alt: "#f3f4f6", line: "#22299b" },
+    marbleOutline: "#141a6b",
+    walls: { color: "#e4eefc", opacity: 0.35 },
+    rails: { color: "#2b35b8" },
+    skirt: { color: "#f3f4f6", stripe: "#22299b" },
+    supports: { color: "#f3f4f6", brace: "#d1e3fb" },
+    gates: { checkpoint: "#ffffff", finish: "#ffffff", start: "#ffffff", glow: "#a9c4ff" },
+    obstacles: { spinner: "#2b35b8", peg: "#f3f4f6", boost: "#2b35b8" },
+    ground: { style: "studio", base: "#d1e3fb", alt: "#c2d4ef" },
+    mountains: { near: "#d1e3fb", far: "#e4eefc", hidden: true },
+    scenery: { style: "coterie", colors: ["#f3f4f6", "#ffffff", "#e4eefc"], trunk: "#ffffff", density: 0.45 },
+    particles: { style: "bubbles", color: "#ffffff" },
+    crowd: ["#22299b", "#f3f4f6", "#9db4dc", "#ffffff", "#2b35b8", "#b8c9dd"],
+    flags: ["#22299b", "#ffffff", "#9db4dc"],
+  },
 ];
+
+/** Themes that rotate through ordinary races (the finale theme is held back for the last race). */
+const ROTATION = THEMES.filter((t) => !t.finale);
 
 function hash(text: string) {
   let h = 2166136261;
@@ -188,9 +233,14 @@ function hash(text: string) {
   return h >>> 0;
 }
 
-/** Each game starts somewhere different in the rotation; consecutive races never repeat a theme. */
-export function themeForRound(gameId: string, round: number): Theme {
-  return THEMES[(hash(gameId) + round - 1) % THEMES.length];
+/**
+ * The grand final always gets the finale theme. Earlier races rotate through the rest, starting
+ * somewhere different each game so consecutive races never repeat a theme.
+ */
+export function themeForRound(game: { id: string; config: { eliminations: number[] } }, round: number): Theme {
+  const finale = THEMES.find((t) => t.finale);
+  if (finale && round >= game.config.eliminations.length) return finale;
+  return ROTATION[(hash(game.id) + round - 1) % ROTATION.length];
 }
 
 export const themeByKey = (key: string) => THEMES.find((t) => t.key === key) ?? THEMES[0];

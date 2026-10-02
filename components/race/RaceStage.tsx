@@ -3,6 +3,7 @@
 import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import { initPhysics, type Entrant, type RaceEvent } from "@/lib/race/engine";
 import { RaceRunner, type RaceSnapshot } from "@/lib/race/runner";
+import { brandFamily } from "@/lib/race/scene/textures";
 import { themeByKey } from "@/lib/race/themes";
 import { generateTrack, type Track } from "@/lib/race/track";
 
@@ -35,7 +36,9 @@ export default function RaceStage({ seed, theme, entrants, eliminate, onReady, o
 
   useEffect(() => {
     let cancelled = false;
-    initPhysics().then(() => {
+    // Signs and labels are drawn onto canvases, which only use a web font once it has loaded.
+    const fontReady = document.fonts.load(`500 40px ${brandFamily()}`).catch(() => undefined);
+    Promise.all([initPhysics(), fontReady]).then(() => {
       if (cancelled || !hostRef.current) return;
       const track = generateTrack(seed);
       runnerRef.current = new RaceRunner({

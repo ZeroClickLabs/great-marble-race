@@ -74,7 +74,7 @@ export default function HostGame({ code }: { code: string }) {
 
   // Music follows the race's theme: calm while betting, full band while racing, finale near the line.
   const audio = useRaceAudio(
-    game ? themeForRound(game.id, round).key : null,
+    game ? themeForRound(game, round).key : null,
     game?.status === "racing" ? raceIntensity(true, snap, finalRace) : game?.status === "finished" ? 1 : 0,
   );
   const sfx = audio.engine;
@@ -218,7 +218,7 @@ export default function HostGame({ code }: { code: string }) {
           key={`${round}:${game.race_seed}`}
           ref={stage}
           seed={game.race_seed}
-          theme={themeForRound(game.id, round).key}
+          theme={themeForRound(game, round).key}
           entrants={entrants}
           eliminate={elim}
           onReady={() => setStageReady(true)}
@@ -375,7 +375,7 @@ function TopBar({
         {game.status !== "finished" && (
           <>
             <span className="text-muted">·</span>
-            <span style={{ color: themeForRound(game.id, game.round).accent }}>{themeForRound(game.id, game.round).name}</span>
+            <span style={{ color: themeForRound(game, game.round).accent }}>{themeForRound(game, game.round).name}</span>
           </>
         )}
         {live && snap && snap.phase !== "grid" && (
@@ -434,7 +434,7 @@ function PreRace({
   const bettors = new Set(roundBets.map((b) => b.player_id)).size;
   const joinUrl = typeof window !== "undefined" ? `${window.location.origin}/play/${code}` : "";
   const final = field.length - elim === 1;
-  const theme = themeForRound(game.id, round);
+  const theme = themeForRound(game, round);
 
   return (
     <>

@@ -16,7 +16,7 @@ export function Standings({ snap, eliminate }: { snap: RaceSnapshot; eliminate: 
           <li
             key={slot}
             className={`flex items-center gap-2 rounded-md px-2 py-[3px] text-sm backdrop-blur-sm transition-colors ${
-              danger ? (snap.phase === "running" ? "pulse-danger bg-danger/20" : "bg-danger/30") : "bg-ink/70"
+              danger ? (snap.phase === "running" ? "pulse-danger bg-danger/20" : "bg-danger/30") : "bg-ink/88"
             } ${i === cut && cut > 0 ? "mt-2" : ""}`}
           >
             <span className="font-display w-5 text-right text-base font-bold tabular text-muted">{i + 1}</span>

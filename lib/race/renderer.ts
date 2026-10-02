@@ -5,7 +5,7 @@ import { Bursts, Trail } from "./scene/effects";
 import { Atmosphere, buildEnvironment, environmentMap, sunOffset, type Lights } from "./scene/environment";
 import { FrameMonitor, PostPipeline, QUALITY_LEVELS } from "./scene/post";
 import { buildScenery } from "./scene/scenery";
-import { buildFlags, buildGates, buildSupports, Grandstand, trackGroundY } from "./scene/structures";
+import { buildBillboards, buildFlags, buildGates, buildSupports, Grandstand, trackGroundY } from "./scene/structures";
 import { chevronTexture, dotTexture, labelTexture, marbleTexture } from "./scene/textures";
 import { buildTrack, sweep } from "./scene/trackMeshes";
 import type { Theme } from "./themes";
@@ -78,7 +78,7 @@ export class RaceRenderer {
     this.lights = buildEnvironment(scene, theme, center, groundY);
     this.sunOffset = sunOffset(theme);
     scene.add(buildTrack(track, theme), buildSupports(track, theme, groundY), buildGates(track, theme), buildFlags(track, theme));
-    scene.add(buildScenery(track, theme, groundY, 420));
+    scene.add(buildScenery(track, theme, groundY, 420), buildBillboards(track, theme, groundY));
     this.grandstand = new Grandstand(track, theme, groundY);
     scene.add(this.grandstand.group);
     this.atmosphere = new Atmosphere(theme, 1600);

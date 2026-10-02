@@ -3,7 +3,8 @@ import { makeRng, type Rng } from "../rng";
 import type { Theme } from "../themes";
 import type { Track } from "../track";
 import { InstanceBatch } from "./structures";
-import { windowTextures } from "./textures";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { jarLabelTexture, wipesLabelTexture, windowTextures } from "./textures";
 
 /** Spatial hash of the track footprint (padded by `clearance`) so props never sprout through it or crowd the camera. */
 function footprint(track: Track, clearance: number, cell = 4) {
@@ -111,6 +112,72 @@ export function buildScenery(track: Track, theme: Theme, groundY: number, budget
         trims.add(compose(p.clone().setY(groundY + h + 0.1), v(w + 0.2, 0.25, d + 0.2), yaw), glows[Math.floor(rng() * glows.length)]);
       }
       group.add(towers.build(), trims.build());
+      break;
+    }
+    case "coterie": {
+      // Giant Coterie products: pebble Balm jars, pillowy Wipes packs and stacks of diapers.
+      const white = new THREE.MeshStandardMaterial({ color: "#f5f6f8", roughness: 0.55 });
+      const jarBase = new InstanceBatch(new THREE.SphereGeometry(1, 24, 14), white);
+      const jarLid = new InstanceBatch(new THREE.SphereGeometry(1, 24, 14), white);
+      const jarLabels = new InstanceBatch(
+        new THREE.PlaneGeometry(1, 0.25),
+        new THREE.MeshBasicMaterial({ map: jarLabelTexture(), transparent: true, depthWrite: false }),
+      );
+      const packSide = new THREE.MeshStandardMaterial({ color: "#eef3fc", roughness: 0.35, metalness: 0.05 });
+      const packTop = new THREE.MeshStandardMaterial({ map: wipesLabelTexture(theme.signs?.ink ?? "#22299b"), roughness: 0.35 });
+      // RoundedBoxGeometry keeps BoxGeometry's face groups: +x, -x, +y (label), -y, +z, -z.
+      const packs = new InstanceBatch(new RoundedBoxGeometry(2.2, 0.55, 1.35, 3, 0.24), [packSide, packSide, packTop, packSide, packSide, packSide]);
+      const diapers = new InstanceBatch(new RoundedBoxGeometry(1, 0.3, 0.75, 2, 0.13), new THREE.MeshStandardMaterial({ color: "#fbfcff", roughness: 0.95 }));
+      const Y = new THREE.Vector3(0, 1, 0);
+      spots.forEach((p, i) => {
+        const yaw = rng() * Math.PI * 2;
+        const q = new THREE.Quaternion().setFromAxisAngle(Y, yaw);
+        const kind = i % 3;
+        if (kind === 0) {
+          const r = 1.4 + rng() * 2.2;
+          jarBase.add(new THREE.Matrix4().compose(p.clone().setY(groundY + r * 0.5), q, v(r, r * 0.5, r)));
+          jarLid.add(new THREE.Matrix4().compose(p.clone().setY(groundY + r * 1.32), q, v(r * 0.84, r * 0.42, r * 0.84)));
+          const front = new THREE.Vector3(0, 0, r * 0.99).applyQuaternion(q);
+          jarLabels.add(new THREE.Matrix4().compose(p.clone().add(front).setY(groundY + r * 0.42), q, v(r * 0.9, r * 0.9, 1)));
+        } else if (kind === 1) {
+          const s = 1.2 + rng() * 1.6;
+          const count = 1 + Math.floor(rng() * 3);
+          for (let k = 0; k < count; k++) {
+            packs.add(compose(p.clone().setY(groundY + s * 0.55 * (k + 0.5)), v(s, s, s), yaw + (rng() - 0.5) * 0.3));
+          }
+        } else {
+          const size = 1.6 + rng() * 1.2;
+          const count = 3 + Math.floor(rng() * 4);
+          for (let k = 0; k < count; k++) {
+            diapers.add(compose(p.clone().setY(groundY + size * 0.3 * (k + 0.5)), v(size, size, size), yaw + (rng() - 0.5) * 0.4));
+          }
+        }
+      });
+      group.add(
+        jarBase.build({ castShadow: true }),
+        jarLid.build({ castShadow: true }),
+        jarLabels.build(),
+        packs.build({ castShadow: true }),
+        diapers.build({ castShadow: true }),
+      );
+
+      // Soft clouds drifting above the course.
+      const box = new THREE.Box3();
+      for (const f of track.samples) box.expandByPoint(f.p);
+      const puffs = new InstanceBatch(
+        new THREE.IcosahedronGeometry(1, 1),
+        new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 1, flatShading: true, emissive: "#ffffff", emissiveIntensity: 0.3 }),
+      );
+      for (let c = 0; c < 22; c++) {
+        const cx = box.min.x - 40 + rng() * (box.max.x - box.min.x + 80);
+        const cz = box.min.z - 40 + rng() * (box.max.z - box.min.z + 80);
+        const cy = box.max.y + 18 + rng() * 25;
+        for (let k = 0; k < 5; k++) {
+          const r = 2.5 + rng() * 3;
+          puffs.add(compose(v(cx + (k - 2) * 3 + rng() * 2, cy + rng() * 1.5, cz + (rng() - 0.5) * 4), v(r, r * 0.7, r)));
+        }
+      }
+      group.add(puffs.build());
       break;
     }
     case "volcanic": {

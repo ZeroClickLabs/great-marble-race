@@ -98,6 +98,23 @@ export const SONGS: Record<string, Song> = {
     lead: [7, null, null, null, 9, null, 7, null, 4, null, null, null, 2, null, null, null, 4, null, null, null, 7, null, 9, null, 11, null, null, null, 9, null, null, null],
     timbre: { bass: "sine", arp: "sine", lead: "triangle", pad: "triangle", bell: true },
   },
+  // Grand final: a music-box lullaby; the lead is "Twinkle Twinkle Little Star" (public domain).
+  coterie: {
+    bpm: 112,
+    root: 60,
+    scale: MAJOR,
+    progression: [[0, 2, 4], [4, 6, 8], [3, 5, 7], [4, 6, 8]],
+    kick: ["x.......x.......", "x.......x.......", "x...x...x...x..."],
+    snare: ["................", "....x.......x...", "....x.......x..x"],
+    hat: ["....x.......x...", "..x...x...x...x.", "x.x.x.x.x.x.x.x."],
+    bass: "x.......5.......",
+    arp: [0, -1, 1, -1, 2, -1, 3, -1, 2, -1, 1, -1, 0, -1, 2, -1],
+    lead: [
+      0, null, 0, null, 4, null, 4, null, 5, null, 5, null, 4, null, null, null,
+      3, null, 3, null, 2, null, 2, null, 1, null, 1, null, 0, null, null, null,
+    ],
+    timbre: { bass: "sine", arp: "sine", lead: "triangle", pad: "triangle", bell: true, clap: true },
+  },
   volcano: {
     bpm: 140,
     root: 52,
