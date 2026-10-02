@@ -175,7 +175,8 @@ export default function HostGame({ code }: { code: string }) {
       setSnap(s);
       updateRaceAmbience(sfx, s);
       if (s.phase !== "running") return;
-      if (s.time > 3) director.current?.openOpeningProp(s.standings);
+      // Open the first prop as soon as the gate drops, to give phones the longest possible window.
+      if (s.time > 0.3) director.current?.openOpeningProp(s.standings);
       // Commentary when the elimination line changes hands.
       const cut = s.standings.length - elim;
       const bubble = s.standings[cut];

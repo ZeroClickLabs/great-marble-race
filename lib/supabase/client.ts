@@ -26,6 +26,11 @@ export async function ensureSession(): Promise<string> {
 
 /** Postgres errors from RPCs carry a readable message; strip the noise. */
 export function errorMessage(e: unknown) {
-  if (e && typeof e === "object" && "message" in e) return String((e as { message: string }).message);
-  return String(e);
+  const msg = e && typeof e === "object" && "message" in e ? String((e as { message: string }).message) : String(e);
+  // Browser-level network failures surface as "TypeError: Load failed" etc. — say what actually happened.
+  if (/^(TypeError|FetchError)\b|Load failed|Failed to fetch|NetworkError/i.test(msg)) {
+    return "Connection dropped — check your signal and try again";
+  }
+  if (/Betting is closed/i.test(msg)) return "Too late — betting just closed on that one";
+  return msg;
 }
