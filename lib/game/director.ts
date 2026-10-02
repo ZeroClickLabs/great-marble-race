@@ -135,27 +135,41 @@ export class RaceDirector {
       const props = mine.filter((m) => m.kind === "prop" && m.status !== "settled" && m.status !== "void");
       await lockMarkets(props.map((m) => m.id));
 
-      const settle: Promise<unknown>[] = [];
+      // Settle one market at a time, briefly spaced: each settlement fans out a realtime update
+      // per bet and per balance to every screen, and doing them all at once spikes past the
+      // Supabase messages-per-second limit with a full room.
+      const settle: (() => Promise<unknown>)[] = [];
       for (const m of mine) {
         if (m.status === "settled" || m.status === "void") continue;
-        if (m.kind === "round_winner") settle.push(settleMarket(m.id, [String(winner)]));
-        if (m.kind === "round_elim") settle.push(settleMarket(m.id, out.map(String)));
+        if (m.kind === "round_winner") settle.push(() => settleMarket(m.id, [String(winner)]));
+        if (m.kind === "round_elim") settle.push(() => settleMarket(m.id, out.map(String)));
       }
-      if (this.leaderWins) settle.push(settleMarket(this.leaderWins.market.id, [order[0] === this.leaderWins.slot ? "yes" : "no"]));
-      if (this.survive) settle.push(settleMarket(this.survive.market.id, [out.includes(this.survive.slot) ? "no" : "yes"]));
+      const leaderWins = this.leaderWins;
+      const survive = this.survive;
+      if (leaderWins) settle.push(() => settleMarket(leaderWins.market.id, [order[0] === leaderWins.slot ? "yes" : "no"]));
+      if (survive) settle.push(() => settleMarket(survive.market.id, [out.includes(survive.slot) ? "no" : "yes"]));
       // Race called before Checkpoint 2: settle on whoever leads at the end.
-      settle.push(this.settleCpLeader(winner));
-      await Promise.all(settle);
+      settle.push(() => this.settleCpLeader(winner));
+      await settleSpaced(settle);
 
       await eliminate(this.game, this.round, out);
       if (this.isFinal) {
         const outrights = this.markets().filter((m) => m.kind === "outright" && m.status !== "settled");
-        await Promise.all(outrights.map((m) => settleMarket(m.id, [String(winner)])));
+        await settleSpaced(outrights.map((m) => () => settleMarket(m.id, [String(winner)])));
         await setGameState(this.game, "finished", this.round, this.game.race_seed);
       } else {
         await setGameState(this.game, "results", this.round, this.game.race_seed);
       }
     });
+  }
+}
+
+const SETTLE_GAP_MS = 250;
+
+async function settleSpaced(jobs: (() => Promise<unknown>)[]) {
+  for (const [i, job] of jobs.entries()) {
+    if (i) await new Promise((r) => setTimeout(r, SETTLE_GAP_MS));
+    await job();
   }
 }
 

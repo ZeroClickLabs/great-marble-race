@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# load-test anonymous sessions (reused to avoid sign-in rate limits)
+.loadtest-sessions.json

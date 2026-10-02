@@ -16,7 +16,7 @@ export const MARBLES: readonly MarbleDef[] = [
   { slot: 4, name: "Blue Moon", color: "#2f6bff", accent: "#cfe0ff", pattern: "dots" },
   { slot: 5, name: "Tangerine", color: "#ff8a1f", accent: "#fff1de", pattern: "solid" },
   { slot: 6, name: "Pinky", color: "#ff6fcf", accent: "#ffffff", pattern: "dots" },
-  { slot: 7, name: "Grape Ape", color: "#8a3ffc", accent: "#e8dcff", pattern: "swirl" },
+  { slot: 7, name: "Grape Escape", color: "#8a3ffc", accent: "#e8dcff", pattern: "swirl" },
   { slot: 8, name: "Snowball", color: "#f2f5fa", accent: "#7fb8ff", pattern: "swirl" },
   { slot: 9, name: "Limelight", color: "#a6e22e", accent: "#2f4a00", pattern: "stripe" },
   { slot: 10, name: "Copperhead", color: "#b8672e", accent: "#ffcf9e", pattern: "stripe" },
