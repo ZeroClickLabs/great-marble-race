@@ -23,6 +23,7 @@ export default function PlayGame({ code }: { code: string }) {
   const { tick, captions } = useRaceFeed(g.game?.id);
   const [tab, setTab] = useState<Tab>("bet");
   const [pickedSlip, setSlip] = useState<{ marketId: string; option: string } | null>(null);
+  const [placing, setPlacing] = useState(false);
   const [toast, setToast] = useState<{ text: string; bad?: boolean } | null>(null);
 
   useEffect(() => {
@@ -45,7 +46,8 @@ export default function PlayGame({ code }: { code: string }) {
   const visible = [...openMarkets].sort((a, b) => order[a.kind] - order[b.kind] || b.created_at.localeCompare(a.created_at));
   const slipMarket = pickedSlip ? g.markets.find((m) => m.id === pickedSlip.marketId) : undefined;
   // The slip disappears by itself if its market closes underneath us.
-  const slip = slipMarket && isBettable(slipMarket, now) ? pickedSlip : null;
+  // (…but not while a bet is mid-flight: the server allows a short grace period, so let it finish.)
+  const slip = slipMarket && (placing || isBettable(slipMarket, now)) ? pickedSlip : null;
 
   if (g.phase === "loading") return <Splash text="Loading…" />;
   if (g.phase === "error") return <Splash text={g.error ?? "Something went wrong"} />;
@@ -134,11 +136,16 @@ export default function PlayGame({ code }: { code: string }) {
           bets={g.bets}
           balance={me.balance}
           onClose={() => setSlip(null)}
+          onBusy={setPlacing}
           onPlaced={(text) => {
+            setPlacing(false);
             setSlip(null);
             setToast({ text });
           }}
-          onError={(text) => setToast({ text, bad: true })}
+          onError={(text) => {
+            setPlacing(false);
+            setToast({ text, bad: true });
+          }}
         />
       )}
 
@@ -238,6 +245,7 @@ function BetSlip({
   bets,
   balance,
   onClose,
+  onBusy,
   onPlaced,
   onError,
 }: {
@@ -246,6 +254,7 @@ function BetSlip({
   bets: Bet[];
   balance: number;
   onClose: () => void;
+  onBusy: (busy: boolean) => void;
   onPlaced: (text: string) => void;
   onError: (text: string) => void;
 }) {
@@ -304,6 +313,7 @@ function BetSlip({
           disabled={busy || amount <= 0 || amount > balance}
           onClick={async () => {
             setBusy(true);
+            onBusy(true);
             try {
               await placeBet(market.id, option, amount);
               onPlaced(`${amount} on ${opt.label} ✓`);

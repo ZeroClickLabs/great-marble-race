@@ -18,8 +18,8 @@ import type { Game, Market, MarketOption } from "./types";
 
 const name = (slot: number) => marbleBySlot(slot).name;
 
-/** Live prop windows, in seconds. */
-const PROP_WINDOW = { cpLeader: 12, leaderWins: 10, survive: 8 };
+/** Live prop windows, in seconds. Generous: players are switching from Zoom to their phone, over a lagging screen share. */
+const PROP_WINDOW = { cpLeader: 20, leaderWins: 15, survive: 12 };
 const BAILOUT_FLOOR = 100;
 
 export const eliminationsFor = (game: Game, round: number) => game.config.eliminations[round - 1] ?? 1;
@@ -75,7 +75,7 @@ export class RaceDirector {
     });
   }
 
-  /** First live prop, opened a few seconds in once the pack has sorted itself out. Safe to call repeatedly. */
+  /** First live prop, opened as the gate drops (it locks at Checkpoint 1). Safe to call repeatedly. */
   openOpeningProp(standings: number[]) {
     if (this.openingPropRequested) return;
     this.openingPropRequested = true;

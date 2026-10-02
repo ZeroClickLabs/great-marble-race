@@ -68,8 +68,50 @@ export async function createGame(eliminations: number[], raceSeed: number) {
 }
 
 export const joinGame = (code: string, nickname: string) => rpc<Player>("join_game", { p_code: code, p_nickname: nickname });
-export const placeBet = (marketId: string, option: string, amount: number) =>
-  rpc<Bet>("place_bet", { p_market: marketId, p_option: option, p_amount: amount });
+/** Network-level failure (request never got a response), as opposed to the server saying no. */
+export function isNetworkError(e: unknown) {
+  const msg = e && typeof e === "object" && "message" in e ? String((e as { message: unknown }).message) : String(e);
+  return /^(TypeError|FetchError)\b|Load failed|Failed to fetch|NetworkError|network connection was lost/i.test(msg);
+}
+
+function newBetId() {
+  const c: Crypto = globalThis.crypto;
+  if (typeof c.randomUUID === "function") return c.randomUUID();
+  // Older Safari (< 15.4): RFC 4122 v4 from getRandomValues.
+  const b = c.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+const RETRY_DELAYS_MS = [150, 400, 900];
+
+/**
+ * Place a bet, retrying dropped requests. Phones often lose the first request after switching
+ * back from another app (Zoom); the bet id makes retries safe — the server returns the original
+ * bet instead of placing it twice.
+ */
+export async function placeBet(marketId: string, option: string, amount: number) {
+  const id = newBetId();
+  let legacy = false;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const args: Record<string, unknown> = { p_market: marketId, p_option: option, p_amount: amount };
+      if (!legacy) args.p_client_id = id;
+      return await rpc<Bet>("place_bet", args);
+    } catch (e) {
+      // Database not migrated yet: fall back to the original three-argument function.
+      if (!legacy && (e as { code?: string }).code === "PGRST202") {
+        legacy = true;
+        attempt--;
+        continue;
+      }
+      if (!isNetworkError(e) || attempt >= RETRY_DELAYS_MS.length) throw e;
+      await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
+    }
+  }
+}
 export const lockMarkets = (ids: string[]) => (ids.length ? rpc<void>("lock_markets", { p_ids: ids }) : Promise.resolve());
 export const settleMarket = (id: string, winners: string[]) => rpc<Market>("settle_market", { p_market: id, p_winners: winners });
 export const voidMarket = (id: string) => rpc<void>("void_market", { p_market: id });
