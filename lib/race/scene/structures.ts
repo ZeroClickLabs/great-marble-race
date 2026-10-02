@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { makeRng } from "../rng";
 import type { Theme } from "../themes";
 import { framePoint, frameQuaternion, TRACK_HALF_WIDTH, type Track } from "../track";
-import { checkerTexture, signTexture } from "./textures";
+import { brandFamily, checkerTexture, signTexture } from "./textures";
 
 const Y = new THREE.Vector3(0, 1, 0);
 const X = new THREE.Vector3(1, 0, 0);
@@ -13,7 +13,7 @@ export class InstanceBatch {
   readonly colors: THREE.Color[] = [];
   constructor(
     private geometry: THREE.BufferGeometry,
-    private material: THREE.Material,
+    private material: THREE.Material | THREE.Material[],
   ) {}
 
   add(m: THREE.Matrix4, color?: THREE.ColorRepresentation) {
@@ -111,7 +111,13 @@ export function buildSupports(track: Track, theme: Theme, groundY: number) {
 }
 
 /** Arch over the track with a sign on both faces and a glowing light strip. */
-function gate(track: Track, s: number, text: string, color: string, glow: string, checkered = false) {
+interface SignStyle {
+  ink?: string;
+  family?: string;
+  weight?: number;
+}
+
+function gate(track: Track, s: number, text: string, color: string, glow: string, checkered = false, style: SignStyle = {}) {
   const f = track.samples[s];
   const g = new THREE.Group();
   g.position.copy(f.p);
@@ -133,8 +139,12 @@ function gate(track: Track, s: number, text: string, color: string, glow: string
   const underGlow = new THREE.Mesh(new THREE.BoxGeometry(x * 2 - 0.3, 0.06, 0.2), glowMat);
   underGlow.position.set(0, 2.6, 0);
   g.add(beam, underGlow);
-  const signMat = new THREE.MeshBasicMaterial({ map: checkered ? checkerTexture() : signTexture(text, color), toneMapped: false });
-  const textMat = new THREE.MeshBasicMaterial({ map: signTexture(text, color), toneMapped: false });
+  // Dark lettering on pale boards, white on dark ones.
+  const c = new THREE.Color(color);
+  const ink = style.ink ?? (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b > 0.45 ? "#16233a" : "#ffffff");
+  const board = signTexture(text, color, ink, style.family, style.weight);
+  const signMat = new THREE.MeshBasicMaterial({ map: checkered ? checkerTexture() : board, toneMapped: false });
+  const textMat = new THREE.MeshBasicMaterial({ map: board, toneMapped: false });
   for (const [z, yaw] of [
     [0.19, 0],
     [-0.19, Math.PI],
@@ -149,9 +159,14 @@ function gate(track: Track, s: number, text: string, color: string, glow: string
 
 export function buildGates(track: Track, theme: Theme) {
   const group = new THREE.Group();
-  group.add(gate(track, track.gateS, "START", theme.gates.start, theme.gates.glow));
-  track.checkpoints.forEach((s, i) => group.add(gate(track, s, `CHECKPOINT ${i + 1}`, theme.gates.checkpoint, theme.gates.glow)));
-  group.add(gate(track, track.finishS, "FINISH", theme.gates.finish, theme.gates.glow));
+  const signs = theme.signs ?? {};
+  const style: SignStyle = { ink: signs.ink, ...(signs.font === "brand" ? { family: brandFamily(), weight: 500 } : {}) };
+  const g = theme.gates;
+  group.add(gate(track, track.gateS, signs.start ?? "START", g.start, g.glow, false, style));
+  track.checkpoints.forEach((s, i) =>
+    group.add(gate(track, s, `${signs.checkpoint ?? "CHECKPOINT"} ${i + 1}`, g.checkpoint, g.glow, false, style)),
+  );
+  group.add(gate(track, track.finishS, signs.finish ?? "FINISH", g.finish, g.glow, false, style));
 
   const f = track.samples[track.finishS];
   const line = new THREE.Mesh(
@@ -275,5 +290,60 @@ export function buildFlags(track: Track, theme: Theme) {
   }
   const group = new THREE.Group();
   group.add(poles.build(), flags.build());
+  return group;
+}
+
+/**
+ * Framed photo billboards beside the course, angled toward the oncoming chase camera.
+ * Images load asynchronously; boards show a plain panel until they arrive.
+ */
+export function buildBillboards(track: Track, theme: Theme, groundY: number) {
+  const group = new THREE.Group();
+  const boards = theme.billboards;
+  if (!boards?.length) return group;
+  const blocked = makeClearanceTest(track);
+  const loader = new THREE.TextureLoader();
+  const textures = boards.map((b) => {
+    const t = loader.load(b.src);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+  });
+  const frameMat = new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 0.4 });
+  const trimMat = new THREE.MeshStandardMaterial({ color: theme.signs?.ink ?? "#22299b", roughness: 0.4 });
+  const postMat = new THREE.MeshStandardMaterial({ color: "#d8dde6", metalness: 0.5, roughness: 0.35 });
+  const H = 2.6;
+  let n = 0;
+  for (let s = track.gateS + 60; s < track.finishS - 20; s += 110) {
+    const f = track.samples[s];
+    const side = n % 2 ? 1 : -1;
+    const b = boards[n % boards.length];
+    const w = H * b.aspect;
+    const anchor = framePoint(f, side * (TRACK_HALF_WIDTH + 2.2 + w / 2), 0);
+    if (blocked(anchor, s, w / 2 + 1.5)) continue;
+    const center = anchor.clone().setY(Math.max(anchor.y, groundY + 1) + H / 2 + 0.6);
+    // Face across the track and back up it, toward marbles (and the camera) coming down.
+    const facing = new THREE.Vector3().copy(f.r).multiplyScalar(-side).addScaledVector(f.t, -0.8);
+    facing.y = 0;
+    const yaw = Math.atan2(facing.x, facing.z);
+    const board = new THREE.Group();
+    board.position.copy(center);
+    board.rotation.y = yaw;
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(w + 0.3, H + 0.3, 0.12), frameMat);
+    frame.castShadow = true;
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(w + 0.3, 0.1, 0.14), trimMat);
+    trim.position.y = -H / 2 - 0.1;
+    const photo = new THREE.Mesh(new THREE.PlaneGeometry(w, H), new THREE.MeshBasicMaterial({ map: textures[n % boards.length], toneMapped: false }));
+    photo.position.z = 0.07;
+    board.add(frame, trim, photo);
+    for (const x of [-w / 2 + 0.3, w / 2 - 0.3]) {
+      const legH = center.y - H / 2 - groundY;
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, legH, 8), postMat);
+      post.position.set(x, -H / 2 - legH / 2, -0.1);
+      board.add(post);
+    }
+    group.add(board);
+    n++;
+  }
   return group;
 }

@@ -2,6 +2,9 @@ import * as THREE from "three";
 import type { MarbleDef } from "../marbles";
 import { makeRng } from "../rng";
 import type { Theme } from "../themes";
+import { brandFont } from "./brandFont";
+
+export const brandFamily = () => brandFont.style.fontFamily;
 
 /** All textures are drawn on canvases at runtime — nothing to download. */
 export function canvasTexture(w: number, h: number, draw: (ctx: CanvasRenderingContext2D) => void, srgb = true) {
@@ -178,6 +181,38 @@ export function floorTextures(theme: Theme): SurfaceTextures {
       });
       return { map, roughness: 0.2, metalness: 0.05 };
     }
+    case "coterie": {
+      const map = canvasTexture(W, H, (ctx) => {
+        ctx.fillStyle = base;
+        ctx.fillRect(0, 0, W, H);
+        // Clean studio-white edge bands with the wordmark running along the track.
+        edges(ctx, (x0, w) =>
+          clipBand(ctx, x0, w, () => {
+            ctx.fillStyle = alt;
+            ctx.fillRect(x0, 0, w, H);
+            ctx.save();
+            ctx.fillStyle = line;
+            ctx.globalAlpha = 0.7;
+            ctx.font = `500 22px ${brandFamily()}`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            for (let y = 64; y < H; y += 128) {
+              ctx.save();
+              ctx.translate(x0 + w / 2, y);
+              // Seen from the chase camera the floor's u axis runs right-to-left, so the texture
+              // appears mirrored; flip the lettering to cancel that, then run it along the track.
+              ctx.scale(-1, 1);
+              ctx.rotate(-Math.PI / 2);
+              ctx.fillText("Coterie", 0, 1);
+              ctx.restore();
+            }
+            ctx.restore();
+          }),
+        );
+        edgeLines(ctx, line, 3);
+      });
+      return { map, roughness: 0.6, metalness: 0 };
+    }
     case "basalt": {
       const draw = (ctx: CanvasRenderingContext2D, dark: boolean) => {
         ctx.fillStyle = dark ? "#000" : base;
@@ -257,6 +292,17 @@ export function groundTextures(theme: Theme): SurfaceTextures {
           ctx.fillStyle = base;
           ctx.fillRect(0, 0, S, S);
           speckle(ctx, S, S, [alt, "#ffffff", "#cfdbe8"], 900, 5, 6);
+        }),
+        roughness: 0.9,
+        metalness: 0,
+      };
+    case "studio":
+      // Seamless photo-studio backdrop: soft periwinkle with the faintest grain.
+      return {
+        map: canvasTexture(S, S, (ctx) => {
+          ctx.fillStyle = base;
+          ctx.fillRect(0, 0, S, S);
+          speckle(ctx, S, S, [alt, "#ffffff"], 500, 3, 14);
         }),
         roughness: 0.9,
         metalness: 0,
@@ -374,7 +420,7 @@ export function labelTexture(m: MarbleDef) {
   });
 }
 
-export function signTexture(text: string, bg: string, fg = "#ffffff") {
+export function signTexture(text: string, bg: string, fg = "#ffffff", family = "system-ui, sans-serif", weight = 800) {
   return canvasTexture(512, 96, (ctx) => {
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, 512, 96);
@@ -382,7 +428,12 @@ export function signTexture(text: string, bg: string, fg = "#ffffff") {
     ctx.fillRect(0, 0, 512, 8);
     ctx.fillRect(0, 88, 512, 8);
     ctx.fillStyle = fg;
-    ctx.font = "800 60px system-ui, sans-serif";
+    // Shrink long signs to fit the board.
+    let size = 60;
+    do {
+      ctx.font = `${weight} ${size}px ${family}`;
+      size -= 2;
+    } while (ctx.measureText(text).width > 480 && size > 24);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(text, 256, 50);
@@ -427,4 +478,62 @@ export function dotTexture() {
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 64, 64);
   });
+}
+
+/** Soap bubble sprite: a thin iridescent ring with a highlight. */
+export function bubbleTexture() {
+  return canvasTexture(64, 64, (ctx) => {
+    const g = ctx.createRadialGradient(32, 32, 18, 32, 32, 30);
+    g.addColorStop(0, "rgba(255,255,255,0.05)");
+    g.addColorStop(0.75, "rgba(200,230,255,0.35)");
+    g.addColorStop(0.9, "rgba(255,200,240,0.8)");
+    g.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 64, 64);
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.beginPath();
+    ctx.ellipse(22, 20, 6, 3.5, -0.6, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+/** Top of a giant Coterie wipes pack: lid outline, wordmark and "99% water". */
+export function wipesLabelTexture(ink: string) {
+  const tex = canvasTexture(512, 300, (ctx) => {
+    const g = ctx.createLinearGradient(0, 0, 0, 300);
+    g.addColorStop(0, "#f7f9ff");
+    g.addColorStop(1, "#e3ecfa");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 512, 300);
+    ctx.strokeStyle = "rgba(34,41,155,0.25)";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.roundRect(150, 26, 212, 84, 42);
+    ctx.stroke();
+    ctx.fillStyle = ink;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `500 44px ${brandFamily()}`;
+    ctx.fillText("Coterie", 256, 70);
+    ctx.font = `500 74px ${brandFamily()}`;
+    ctx.fillText("99% water", 256, 190);
+    ctx.font = `500 26px ${brandFamily()}`;
+    ctx.fillText("The Wipe", 256, 262);
+  });
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  return tex;
+}
+
+/** Soft grey wordmark printed on the front of a balm jar. */
+export function jarLabelTexture() {
+  const tex = canvasTexture(256, 64, (ctx) => {
+    ctx.clearRect(0, 0, 256, 64);
+    ctx.fillStyle = "#8f8f8f";
+    ctx.font = `500 44px ${brandFamily()}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("Coterie", 128, 34);
+  });
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  return tex;
 }

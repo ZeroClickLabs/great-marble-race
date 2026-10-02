@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { makeRng } from "../rng";
 import type { Theme } from "../themes";
-import { dotTexture, groundTextures } from "./textures";
+import { bubbleTexture, dotTexture, groundTextures } from "./textures";
 
 /** Image-based lighting from a procedural room: real-looking reflections on marbles and glass for free. */
 export function environmentMap(renderer: THREE.WebGLRenderer) {
@@ -107,7 +107,7 @@ function mountains(theme: Theme, center: THREE.Vector3, groundY: number) {
 function ground(theme: Theme, center: THREE.Vector3, groundY: number) {
   const tex = groundTextures(theme);
   // Large tiles where the pattern is distinctive (lava cracks), so the repetition isn't obvious.
-  const repeat = { grid: 160, ash: 45, grass: 120, frosting: 120, snow: 120 }[theme.ground.style];
+  const repeat = { grid: 160, ash: 45, grass: 120, frosting: 120, snow: 120, studio: 60 }[theme.ground.style];
   for (const t of [tex.map, tex.emissiveMap]) t?.repeat.set(repeat, repeat);
   const mesh = new THREE.Mesh(
     new THREE.CircleGeometry(700, 64),
@@ -155,8 +155,9 @@ export class Atmosphere {
       embers: new THREE.Vector3(0.3, 2.2, -0.2),
       pollen: new THREE.Vector3(0.6, 0.15, 0.3),
       sprinkles: new THREE.Vector3(0.1, -2.4, 0.1),
+      bubbles: new THREE.Vector3(0.3, 0.9, 0.15),
     }[style];
-    const size = { snow: 0.22, embers: 0.18, pollen: 0.12, sprinkles: 0.16 }[style];
+    const size = { snow: 0.22, embers: 0.18, pollen: 0.12, sprinkles: 0.16, bubbles: 0.45 }[style];
     this.material = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
@@ -167,7 +168,7 @@ export class Atmosphere {
         box: { value: box },
         velocity: { value: velocity },
         size: { value: size },
-        map: { value: dotTexture() },
+        map: { value: style === "bubbles" ? bubbleTexture() : dotTexture() },
         glow: { value: style === "embers" ? 3.0 : 1.0 },
       },
       vertexShader: /* glsl */ `
@@ -215,7 +216,8 @@ export function buildEnvironment(scene: THREE.Scene, theme: Theme, center: THREE
   scene.fog = new THREE.Fog(theme.fog.color, theme.fog.near, theme.fog.far);
   scene.add(skyDome(theme));
   if (theme.sky.stars) scene.add(stars());
-  scene.add(ground(theme, center, groundY), mountains(theme, center, groundY));
+  scene.add(ground(theme, center, groundY));
+  if (!theme.mountains.hidden) scene.add(mountains(theme, center, groundY));
 
   scene.add(new THREE.HemisphereLight(theme.hemi.sky, theme.hemi.ground, theme.hemi.intensity));
   const sun = new THREE.DirectionalLight(theme.sun.color, theme.sun.intensity);
