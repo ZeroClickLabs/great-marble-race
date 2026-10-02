@@ -3,6 +3,7 @@
 import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import { initPhysics, type Entrant, type RaceEvent } from "@/lib/race/engine";
 import { RaceRunner, type RaceSnapshot } from "@/lib/race/runner";
+import { themeByKey } from "@/lib/race/themes";
 import { generateTrack, type Track } from "@/lib/race/track";
 
 export interface RaceStageHandle {
@@ -11,6 +12,8 @@ export interface RaceStageHandle {
 
 interface Props {
   seed: number;
+  /** Theme key from lib/race/themes. */
+  theme: string;
   entrants: Entrant[];
   eliminate: number;
   onReady?: (track: Track) => void;
@@ -20,7 +23,7 @@ interface Props {
 }
 
 /** Full-bleed 3D race. Mount it once per race; change `seed` to build a new track. */
-export default function RaceStage({ seed, entrants, eliminate, onReady, onEvent, onTick, ref }: Props) {
+export default function RaceStage({ seed, theme, entrants, eliminate, onReady, onEvent, onTick, ref }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const runnerRef = useRef<RaceRunner | null>(null);
   const callbacks = useRef({ onReady, onEvent, onTick });
@@ -38,6 +41,7 @@ export default function RaceStage({ seed, entrants, eliminate, onReady, onEvent,
       runnerRef.current = new RaceRunner({
         host: hostRef.current,
         track,
+        theme: themeByKey(theme),
         entrants,
         seed,
         eliminate,
@@ -53,7 +57,7 @@ export default function RaceStage({ seed, entrants, eliminate, onReady, onEvent,
     };
     // entrantsKey stands in for `entrants` so a new array with the same field doesn't rebuild the race.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seed, entrantsKey, eliminate]);
+  }, [seed, theme, entrantsKey, eliminate]);
 
   useImperativeHandle(ref, () => ({ start: () => runnerRef.current?.start() }), []);
 

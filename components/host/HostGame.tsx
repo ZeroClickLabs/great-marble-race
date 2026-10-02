@@ -17,6 +17,7 @@ import { useGame } from "@/lib/game/useGame";
 import { useNow, useRaceBroadcaster } from "@/lib/game/useRaceFeed";
 import type { RaceEvent } from "@/lib/race/engine";
 import { marbleBySlot } from "@/lib/race/marbles";
+import { themeForRound } from "@/lib/race/themes";
 import type { RaceSnapshot } from "@/lib/race/runner";
 import { errorMessage } from "@/lib/supabase/client";
 
@@ -191,6 +192,7 @@ export default function HostGame({ code }: { code: string }) {
           key={`${round}:${game.race_seed}`}
           ref={stage}
           seed={game.race_seed}
+          theme={themeForRound(game.id, round).key}
           entrants={entrants}
           eliminate={elim}
           onReady={() => setStageReady(true)}
@@ -318,6 +320,12 @@ function TopBar({ game, code, snap, live }: { game: Game; code: string; snap: Ra
         <span className="text-lime">Great Marble Race</span>
         <span className="text-muted">·</span>
         <span>{game.status === "finished" ? "Champion" : `Race ${game.round} of ${total}`}</span>
+        {game.status !== "finished" && (
+          <>
+            <span className="text-muted">·</span>
+            <span style={{ color: themeForRound(game.id, game.round).accent }}>{themeForRound(game.id, game.round).name}</span>
+          </>
+        )}
         {live && snap && snap.phase !== "grid" && (
           <>
             <span className="text-muted">·</span>
@@ -371,12 +379,17 @@ function PreRace({
   const bettors = new Set(roundBets.map((b) => b.player_id)).size;
   const joinUrl = typeof window !== "undefined" ? `${window.location.origin}/play/${code}` : "";
   const final = field.length - elim === 1;
+  const theme = themeForRound(game.id, round);
 
   return (
     <>
       <div className="absolute left-4 top-20 bottom-4 flex w-[420px] flex-col gap-3 overflow-hidden rounded-2xl bg-ink/88 p-4 backdrop-blur">
         <div>
+          <div className="text-sm font-bold uppercase tracking-widest" style={{ color: theme.accent }}>
+            {theme.name}
+          </div>
           <div className="font-display text-5xl font-extrabold uppercase leading-none">{final ? "The Grand Final" : `Race ${round}`}</div>
+          <div className="text-sm text-muted">{theme.tagline}</div>
           <div className="mt-1 text-lg text-muted">
             {field.length} marbles ·{" "}
             <span className="font-bold text-danger">{final ? "winner takes the crown" : `bottom ${elim} knocked out`}</span>
