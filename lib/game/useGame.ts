@@ -44,6 +44,16 @@ export function useGame(code: string) {
     let cancelled = false;
     const sb = supabase();
 
+    // Several markets settle a moment apart at the end of a race; fetch payouts once afterwards.
+    let betsTimer: ReturnType<typeof setTimeout> | null = null;
+    function refreshBets(gameId: string) {
+      if (betsTimer) clearTimeout(betsTimer);
+      betsTimer = setTimeout(async () => {
+        const { data } = await sb.from("bets").select("*").eq("game_id", gameId);
+        if (!cancelled && data) setState((s) => ({ ...s, bets: data as Bet[] }));
+      }, 600);
+    }
+
     async function loadAll(gameId: string) {
       const [players, marbles, markets, bets, game] = await Promise.all([
         sb.from("players").select("*").eq("game_id", gameId),
@@ -88,6 +98,7 @@ export function useGame(code: string) {
           )
           .on("postgres_changes", { event: "*", schema: "public", table: "markets", filter }, (p) => {
             const market = p.new as Market;
+            if (market.status === "settled" || market.status === "void") refreshBets(game.id);
             // A brand-new row's created_at is (server now − delivery latency); the largest sample is the best estimate.
             const sample = p.eventType === "INSERT" ? Date.parse(market.created_at) - Date.now() : null;
             setState((s) => ({
@@ -100,7 +111,10 @@ export function useGame(code: string) {
               clockOffsetSampled: s.clockOffsetSampled || sample !== null,
             }));
           })
-          .on("postgres_changes", { event: "*", schema: "public", table: "bets", filter }, (p) =>
+          // New bets only (they drive the live odds). Settlement writes a payout to every bet at
+          // once; streaming those to every screen is the biggest realtime spike of the game, so
+          // payouts are fetched in one query when a market settles instead (below).
+          .on("postgres_changes", { event: "INSERT", schema: "public", table: "bets", filter }, (p) =>
             setState((s) => ({ ...s, bets: upsert(s.bets, p.new as Bet, (r) => r.id) })),
           )
           .subscribe((status) => {
@@ -115,6 +129,7 @@ export function useGame(code: string) {
 
     return () => {
       cancelled = true;
+      if (betsTimer) clearTimeout(betsTimer);
       if (channelRef.current) sb.removeChannel(channelRef.current);
       channelRef.current = null;
     };
