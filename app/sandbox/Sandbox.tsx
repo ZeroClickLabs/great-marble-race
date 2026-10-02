@@ -8,6 +8,7 @@ import type { RaceEvent } from "@/lib/race/engine";
 import { marbleBySlot } from "@/lib/race/marbles";
 import type { RaceSnapshot } from "@/lib/race/runner";
 import { randomSeed } from "@/lib/race/rng";
+import { THEMES } from "@/lib/race/themes";
 
 const RaceStage = dynamic(() => import("@/components/race/RaceStage"), { ssr: false });
 
@@ -27,6 +28,7 @@ function describe(e: RaceEvent) {
 /** Dev page for tuning tracks and cameras without a game backend. */
 export default function Sandbox() {
   const [seed, setSeed] = useState(1);
+  const [theme, setTheme] = useState(THEMES[0].key);
   const [snap, setSnap] = useState<RaceSnapshot | null>(null);
   const [log, setLog] = useState<string[]>([]);
   const stage = useRef<RaceStageHandle>(null);
@@ -36,6 +38,7 @@ export default function Sandbox() {
       <RaceStage
         ref={stage}
         seed={seed}
+        theme={theme}
         entrants={ENTRANTS}
         eliminate={4}
         onTick={setSnap}
@@ -58,6 +61,21 @@ export default function Sandbox() {
             New track
           </button>
           <span className="self-center tabular text-muted">seed {seed}</span>
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {THEMES.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => {
+                setTheme(t.key);
+                setLog([]);
+                setSnap(null);
+              }}
+              className={`rounded px-2 py-0.5 text-xs ${theme === t.key ? "bg-lime text-ink" : "bg-panel-2"}`}
+            >
+              {t.name}
+            </button>
+          ))}
         </div>
         <div className="tabular">t = {snap?.time.toFixed(1)}s {snap?.slowMo && "· SLOW-MO"}</div>
         <ul className="text-muted">

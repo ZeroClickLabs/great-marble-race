@@ -1,5 +1,6 @@
 import { FIXED_DT, Race, type Entrant, type RaceEvent } from "./engine";
 import { RaceRenderer } from "./renderer";
+import type { Theme } from "./themes";
 import type { Track } from "./track";
 
 export interface RaceSnapshot {
@@ -15,6 +16,7 @@ export interface RaceSnapshot {
 export interface RunnerOptions {
   host: HTMLElement;
   track: Track;
+  theme: Theme;
   entrants: Entrant[];
   seed: number;
   /** How many marbles get knocked out this race (drives the "battle" camera). */
@@ -42,12 +44,26 @@ export class RaceRunner {
 
   constructor(private opts: RunnerOptions) {
     this.race = new Race(opts.track, opts.entrants, opts.seed, opts.entrants.length - opts.eliminate);
-    this.view = new RaceRenderer(opts.host, this.race);
+    this.view = new RaceRenderer(opts.host, this.race, opts.theme);
     this.raf = requestAnimationFrame(this.frame);
+    if (process.env.NODE_ENV !== "production") (window as unknown as { __raceRunner: RaceRunner }).__raceRunner = this;
     // Browsers pause requestAnimationFrame in background tabs; keep the race (and the bets riding on it) moving.
     this.backup = setInterval(() => {
       if (this.last && performance.now() - this.last > 250) this.advance(Math.min(0.5, (performance.now() - this.last) / 1000), performance.now());
     }, 100);
+  }
+
+  /** Dev aid: average ms to render one frame (CPU + GPU, synchronous). */
+  benchmark(frames = 120) {
+    const gl = this.view.renderer.getContext();
+    this.view.render(1 / 60);
+    gl.finish();
+    const t0 = performance.now();
+    for (let i = 0; i < frames; i++) {
+      this.view.render(1 / 60);
+      gl.finish();
+    }
+    return (performance.now() - t0) / frames;
   }
 
   start() {
